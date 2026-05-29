@@ -6,6 +6,7 @@ import threading
 from datetime import datetime
 
 import pyautogui
+from pyautogui import FailSafeException
 from pynput import mouse, keyboard
 
 # ---------------- CONFIG DEFAULTS ---------------- #
@@ -14,7 +15,7 @@ DEFAULT_CHECK_INTERVAL = 5
 DEFAULT_INACTIVITY_THRESHOLD = 60
 DEFAULT_MOVE_DURATION = 0.8
 DEFAULT_WORK_START = 9
-DEFAULT_WORK_END = 18
+DEFAULT_WORK_END = 19
 
 pyautogui.FAILSAFE = True
 
@@ -61,10 +62,48 @@ def is_inactive(threshold):
     with lock:
         return (time.monotonic() - last_activity_time) >= threshold
 
+def is_safe_position(x, y, width, height, margin=50):
+    if x < 0 or y < 0 or x >= width or y >= height:
+        return False
+
+    corners = [
+        (0, 0),
+        (width - 1, 0),
+        (0, height - 1),
+        (width - 1, height - 1)
+    ]
+
+    for corner_x, corner_y in corners:
+        dx = x - corner_x
+        dy = y - corner_y
+        if (dx * dx + dy * dy) <= (margin * margin):
+            return False
+
+    return True
+
 def human_like_mouse_move(duration):
-    offset_x = random.randint(-30, 30)
-    offset_y = random.randint(-30, 30)
-    pyautogui.moveRel(offset_x, offset_y, duration=duration)
+    current_x, current_y = pyautogui.position()
+    screen_width, screen_height = pyautogui.size()
+
+    for attempt in range(3):
+        offset_x = random.randint(-30, 30)
+        offset_y = random.randint(-30, 30)
+        new_x = current_x + offset_x
+        new_y = current_y + offset_y
+
+        if is_safe_position(new_x, new_y, screen_width, screen_height):
+            break
+
+        logger.debug("Position too close to corner, regenerating offset")
+    else:
+        logger.warning("Unable to find safe offset, skipping movement")
+        return
+
+    try:
+        pyautogui.moveRel(offset_x, offset_y, duration=duration)
+    except FailSafeException:
+        logger.critical("Failsafe triggered — mouse movement cancelled")
+        return
 
 # ---------------- HOTKEY ---------------- #
 
@@ -84,24 +123,28 @@ def start_hotkey_listener():
 def run(args):
     logger.info("Anti Desk Time started")
     logger.info("Press CTRL + SHIFT + P to pause/resume")
-    logger.info("Move mouse to top-left corner to force stop")
+    logger.info("Failsafe enabled — move mouse to top-left corner to safely stop")
 
     start_activity_listeners()
     start_hotkey_listener()
 
     while True:
-        time.sleep(args.check_interval)
+        try:
+            time.sleep(args.check_interval)
 
-        if paused:
-            continue
+            if paused:
+                continue
 
-        if not is_within_work_hours(args.work_start, args.work_end):
-            continue
+            if not is_within_work_hours(args.work_start, args.work_end):
+                continue
 
-        if is_inactive(args.inactivity_threshold):
-            logger.info("Inactivity detected → simulating movement")
-            human_like_mouse_move(args.move_duration)
-            update_activity()
+            if is_inactive(args.inactivity_threshold):
+                logger.info("Inactivity detected → simulating movement")
+                human_like_mouse_move(args.move_duration)
+                update_activity()
+        except FailSafeException:
+            logger.critical("Failsafe triggered — script paused for safety")
+            paused = True
 
 # ---------------- ARGUMENTS ---------------- #
 

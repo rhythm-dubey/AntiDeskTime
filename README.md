@@ -11,6 +11,7 @@ Designed with clean architecture, human-like behavior, and developer-friendly co
 
 - 🖱️ Mouse and keyboard activity detection
 - 🧠 Human-like mouse movement (small jitter, not teleporting)
+- 🛡️ Corner-safe movement to avoid accidental failsafe triggers
 - ⏱️ Configurable inactivity threshold
 - ⌨️ Global hotkey to pause/resume the script
 - 🕘 Work-hours aware (auto disables outside office time)
@@ -27,6 +28,15 @@ Designed with clean architecture, human-like behavior, and developer-friendly co
 ---
 
 ## 📥 Installation
+
+```bash
+python -m venv venv
+source venv/bin/activate   # macOS/Linux
+venv\Scripts\activate     # Windows
+pip install -r requirements.txt
+```
+
+If `requirements.txt` is not available, install the core dependencies directly:
 
 ```bash
 pip install pyautogui pynput
@@ -73,7 +83,17 @@ python index.py \
 
 ---
 
-## 🕘 Work Hours Behavior
+## � Safety Notes
+
+- No mouse clicks are performed
+- No keystrokes are injected
+- Mouse movement is minimal and human-like
+- Movement avoids screen corners to prevent accidental failsafe activation
+- Runs entirely locally (no network access)
+
+---
+
+## �🕘 Work Hours Behavior
 
 Script runs continuously, but:
 - Mouse movement is triggered **only during configured work hours**
